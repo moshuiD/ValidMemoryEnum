@@ -4,11 +4,8 @@
 #include <winternl.h>
 #include <thread>
 #include <chrono>
-#include <concurrent_unordered_set.h>
 #include <concurrent_unordered_map.h>
-#include <memory>
-#include <iostream>
-#include <future>
+
 
 class ValidMemoryEnum
 {
@@ -17,7 +14,7 @@ private:
 	ValidMemoryEnum();
 #else
 	ValidMemoryEnum(DWORD pid) :
-		m_Pid(pid) 
+		m_Pid(pid)
 	{
 		m_ProcHandle = OpenProcess(PROCESS_ALL_ACCESS, false, m_Pid);
 #endif
@@ -105,13 +102,13 @@ inline void ValidMemoryEnum::HeapScan()
 		m_InvalidHeapTable.clear();
 		for (auto bOK = Heap32ListFirst(snapShot, &heapList); bOK; bOK = Heap32ListNext(snapShot, &heapList))
 		{
-			
-				HEAPENTRY32 heapEntry = { sizeof(HEAPENTRY32) };
-				for (auto heap = Heap32First(&heapEntry, heapList.th32ProcessID, heapList.th32HeapID); heap; heap = Heap32Next(&heapEntry))
-				{
-					m_InvalidHeapTable.insert(std::make_pair((DWORD64)heapEntry.dwAddress, heapEntry.dwBlockSize));
-				}
-			
+
+			HEAPENTRY32 heapEntry = { sizeof(HEAPENTRY32) };
+			for (auto heap = Heap32First(&heapEntry, heapList.th32ProcessID, heapList.th32HeapID); heap; heap = Heap32Next(&heapEntry))
+			{
+				m_InvalidHeapTable.insert(std::make_pair((DWORD64)heapEntry.dwAddress, heapEntry.dwBlockSize));
+			}
+
 		}
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 	}
@@ -126,20 +123,20 @@ inline void ValidMemoryEnum::StackScan()
 		for (auto thread = Thread32First(snapShot, (LPTHREADENTRY32)&threadEntry); thread; thread = Thread32Next(snapShot, (LPTHREADENTRY32)&threadEntry))
 		{
 			if (threadEntry.th32OwnerProcessID == m_Pid) {
-				
-					NT_TIB64 tib{};
-					HANDLE threadHandle = OpenThread(THREAD_QUERY_INFORMATION, FALSE, threadEntry.th32ThreadID);
-					if (threadHandle != INVALID_HANDLE_VALUE) {
-						THREAD_BASIC_INFORMATION tbi{};
-						if (NT_SUCCESS(NtQueryInformationThread(threadHandle, ThreadBasicInformation, &tbi, sizeof(tbi), NULL))) {
-							PVOID stackStart = (PVOID)((NT_TIB64*)tbi.TebBaseAddress)->StackBase;
-							SIZE_T stackSize = (SIZE_T)stackStart - ((NT_TIB64*)tbi.TebBaseAddress)->StackLimit;
-							m_InvalidStackTable.insert(std::make_pair((DWORD64)stackStart, stackSize));
-						}
 
-						CloseHandle(threadHandle);
+				NT_TIB64 tib{};
+				HANDLE threadHandle = OpenThread(THREAD_QUERY_INFORMATION, FALSE, threadEntry.th32ThreadID);
+				if (threadHandle != INVALID_HANDLE_VALUE) {
+					THREAD_BASIC_INFORMATION tbi{};
+					if (NT_SUCCESS(NtQueryInformationThread(threadHandle, ThreadBasicInformation, &tbi, sizeof(tbi), NULL))) {
+						PVOID stackStart = (PVOID)((NT_TIB64*)tbi.TebBaseAddress)->StackBase;
+						SIZE_T stackSize = (SIZE_T)stackStart - ((NT_TIB64*)tbi.TebBaseAddress)->StackLimit;
+						m_InvalidStackTable.insert(std::make_pair((DWORD64)stackStart, stackSize));
 					}
-				
+
+					CloseHandle(threadHandle);
+				}
+
 			}
 		}
 		std::this_thread::sleep_for(std::chrono::milliseconds(5));
